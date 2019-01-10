@@ -9,8 +9,6 @@ open System.Text
 open FSharp.Data
 open System
 
-let ukCustomers =
-   <@@ 1 + 2 @@>
 
 type Updates = JsonProvider<""" {
     "ok ": true,
@@ -41,16 +39,17 @@ type Updates = JsonProvider<""" {
     ]
 } """>
 
-let schedulerFactory = StdSchedulerFactory()
 let scheduler = 
-    let c = async {
-        let! sc = schedulerFactory.GetScheduler()
-        return sc
+    let comp = async {
+        let schedulerFactory = StdSchedulerFactory()
+        let! schd = schedulerFactory.GetScheduler()
+        let casted = schd :> IScheduler
+        schd.Start() |> ignore
+        return schd
     }
 
-    Async.RunSynchronously c
+    Async.RunSynchronously comp
 
-scheduler.Start() |> ignore
 
 type TelegramUpdateMessage = 
     {
@@ -84,12 +83,6 @@ let getTelegramString<'T> method =
         let url = sprintf "https://api.telegram.org/bot678792687:AAHa9sbP9zT4hm8x8ZD10u1GzJSf6ZIJiJg/%s" method
         let! res =  client.GetStringAsync(url)
         let upd = Updates.Parse(res)
-        query {
-            for msg in upd.Result do
-            where ( msg.Message.Chat.Id = 1)
-            select msg
-        }
-
 
         return JsonConvert.DeserializeObject<'T>(res)
     }
@@ -104,8 +97,6 @@ let sendMessage chatId message =
         let! res =  client.PostAsync(url, content)
         return res
     }
-
-//let r1 = Async.RunSynchronously (sendMessage 436295526 "vava")
 
 type TestJob() =
     interface IJob with
