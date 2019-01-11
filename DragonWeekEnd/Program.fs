@@ -8,6 +8,9 @@ open System.Net.Http
 open System.Text
 open FSharp.Data
 open System
+open NodaTime
+
+open Domain
 
 
 type Updates = JsonProvider<""" {
