@@ -1,6 +1,7 @@
 ﻿module Domain
 
     open System
+    open NodaTime
 
     type Fact =
         | Yes
@@ -20,7 +21,7 @@
         WeekDay * Fact
 
     type WeekDrinkFact = private {   
-                WeekStart : DateTime
+                WeekStart : LocalDate
                 Days: DayDrinkFact list }
 
     let getDayFact
@@ -35,27 +36,27 @@
                     | None -> DayDrinkFact(weekDay, NA)
     
     let dayOfWeekToWeekDay 
-        (dayOfWeek: DayOfWeek)
+        (dayOfWeek: IsoDayOfWeek)
         : WeekDay option =
         match dayOfWeek with
-        | DayOfWeek.Monday -> Some Monday
-        | DayOfWeek.Tuesday -> Some Tuesday
-        | DayOfWeek.Wednesday -> Some Wednesday
-        | DayOfWeek.Thursday -> Some Thursday
-        | DayOfWeek.Friday -> Some Friday
-        | DayOfWeek.Saturday -> Some Saturday
-        | DayOfWeek.Sunday -> Some Sunday
+        | IsoDayOfWeek.Monday -> Some Monday
+        | IsoDayOfWeek.Tuesday -> Some Tuesday
+        | IsoDayOfWeek.Wednesday -> Some Wednesday
+        | IsoDayOfWeek.Thursday -> Some Thursday
+        | IsoDayOfWeek.Friday -> Some Friday
+        | IsoDayOfWeek.Saturday -> Some Saturday
+        | IsoDayOfWeek.Sunday -> Some Sunday
         | _ -> None
     
     let getWeekDay 
-        (date: DateTime)
+        (date: LocalDate)
         : WeekDay option =
         dayOfWeekToWeekDay date.DayOfWeek
         
     module WeekDrinkFact =
 
         let create 
-            (days: (DateTime*bool) list)
+            (days: (LocalDate*bool) list)
             : WeekDrinkFact option =
             let sortedDays = 
                 days
@@ -66,13 +67,18 @@
             | None -> None
             | Some (firstDay, _) ->
 
-            let firstWeekDayOption = getWeekDay firstDay
-            match firstWeekDayOption with
-            | None -> None
-            | Some firstWeekDay ->
-
-            let lastDayDrink = List.last sortedDays
-            let lastDay, _ = lastDayDrink
+            //let firstWeekDayOption = getWeekDay firstDay
+            //match firstWeekDayOption with
+            //| None -> None
+            //| Some firstWeekDay ->
+            
+            let startOfWeek = firstDay.Previous(IsoDayOfWeek.Monday)
+            let endOfWeek = firstDay.Previous(IsoDayOfWeek.Sunday)
+            
+            let inWeekDays = 
+                days
+                |> List.takeWhile (fun (day, _) -> day < endOfWeek)
+                |> List.z
 
             failwith ""
             

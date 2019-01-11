@@ -11,7 +11,14 @@ open System
 open NodaTime
 
 open Domain
+open NodaTime
 
+let n = LocalDate.FromYearMonthWeekAndDay(2019, 1, 2, IsoDayOfWeek.Monday)
+let va = n.Previous(IsoDayOfWeek.Monday)
+let vava = n.Previous(IsoDayOfWeek.Sunday)
+
+//lastDay.Previous(IsoDayOfWeek.Monday);
+let aa = 2
 
 type Updates = JsonProvider<""" {
     "ok ": true,
