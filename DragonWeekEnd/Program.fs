@@ -11,11 +11,27 @@ open System
 open NodaTime
 
 open Domain
-open NodaTime
+open MongoDB.Driver
+open MongoDB.Bson
+open MongoDB.Bson.Serialization.Attributes
 
-let n = LocalDate.FromYearMonthWeekAndDay(2019, 1, 2, IsoDayOfWeek.Monday)
-let va = n.Previous(IsoDayOfWeek.Monday)
-let vava = n.Previous(IsoDayOfWeek.Sunday)
+type MongoDto () =
+    [<BsonId>]
+    member val Id : BsonObjectId = BsonObjectId.Empty with get, set
+    
+
+let connectionString = "mongodb://vavava:aiusdan3HAk2@ds149984.mlab.com:49984/appharbor_srt410vj"
+let url = new MongoUrl(connectionString)
+let client = new MongoClient(url)
+
+let db = client.GetDatabase("appharbor_srt410vj")
+let coll = db.GetCollection<MongoDto>("MongoDto")
+coll.InsertOne(new MongoDto())
+let vav = coll.Find(fun x -> true).ToList()
+
+let firstDay = LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Monday)
+
+let res = WeekDrinkFact.create([(firstDay, true)])
 
 //lastDay.Previous(IsoDayOfWeek.Monday);
 let aa = 2

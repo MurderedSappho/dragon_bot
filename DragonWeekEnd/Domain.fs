@@ -1,6 +1,5 @@
 ﻿module Domain
 
-    open System
     open NodaTime
 
     type Fact =
@@ -19,10 +18,6 @@
 
     type DayDrinkFact =
         WeekDay * Fact
-
-    type WeekDrinkFact = private {   
-                WeekStart : LocalDate
-                Days: DayDrinkFact list }
 
     let getDayFact
         (facts: DayDrinkFact list)
@@ -50,9 +45,12 @@
     
     let getWeekDay 
         (date: LocalDate)
-        : WeekDay option =
-        dayOfWeekToWeekDay date.DayOfWeek
-        
+        : WeekDay option = dayOfWeekToWeekDay date.DayOfWeek
+
+    type WeekDrinkFact = private {
+        WeekStart : LocalDate
+        Days: DayDrinkFact list }
+
     module WeekDrinkFact =
 
         let create 
@@ -67,25 +65,46 @@
             | None -> None
             | Some (firstDay, _) ->
 
-            //let firstWeekDayOption = getWeekDay firstDay
-            //match firstWeekDayOption with
-            //| None -> None
-            //| Some firstWeekDay ->
-            
-            let startOfWeek = firstDay.Previous(IsoDayOfWeek.Monday)
-            let endOfWeek = firstDay.Previous(IsoDayOfWeek.Sunday)
+            let daysFromMonday = 
+                firstDay.DayOfWeek
+                |> LanguagePrimitives.EnumToValue
+                |> (*) -1
+
+            let previousSunday = firstDay.PlusDays(daysFromMonday)
+
+            let weekDays = 
+                [1..7]
+                |> List.map (fun n -> previousSunday.PlusDays(n))
             
             let inWeekDays = 
-                days
-                |> List.takeWhile (fun (day, _) -> day < endOfWeek)
-                |> List.z
+                weekDays
+                |> List.map (fun day ->
+                        let weekDay = 
+                            getWeekDay(day)
+                            |> function
+                                | Some weekDay -> weekDay
+                                | None -> failwith "Bad day"
 
-            failwith ""
+                        let boolToFact bool =
+                            match bool with
+                            | true -> Fact.Yes
+                            | false -> Fact.No
+
+                        let resultsForDay =
+                            days
+                            |> List.where (fun (d, _) -> d = day)
+                            |> List.first
+                            |> function
+                                | Some (_, result) -> DayDrinkFact(weekDay, boolToFact result)
+                                | None -> DayDrinkFact(weekDay, NA)
+
+                        resultsForDay)
             
+            let weekStart = previousSunday.PlusDays(1)
             
-            
-            
-        
+            Some { 
+                WeekStart = weekStart;
+                Days = inWeekDays }
 
         type WeekDrinkFact with
             member this.Monday = getDayFact this.Days Monday
