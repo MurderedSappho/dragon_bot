@@ -8,32 +8,13 @@ open System.Net.Http
 open System.Text
 open FSharp.Data
 open System
+open YoLo
 open NodaTime
 
-open Domain
-open MongoDB.Driver
-open MongoDB.Bson
-open MongoDB.Bson.Serialization.Attributes
+let fact = Domain.WeekDrinkFact.create [(LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Friday), true)]
+let first = Storage.create fact.Value
+let all = Storage.getAll()
 
-type MongoDto () =
-    [<BsonId>]
-    member val Id : BsonObjectId = BsonObjectId.Empty with get, set
-    
-
-let connectionString = "mongodb://vavava:aiusdan3HAk2@ds149984.mlab.com:49984/appharbor_srt410vj"
-let url = new MongoUrl(connectionString)
-let client = new MongoClient(url)
-
-let db = client.GetDatabase("appharbor_srt410vj")
-let coll = db.GetCollection<MongoDto>("MongoDto")
-coll.InsertOne(new MongoDto())
-let vav = coll.Find(fun x -> true).ToList()
-
-let firstDay = LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Monday)
-
-let res = WeekDrinkFact.create([(firstDay, true)])
-
-//lastDay.Previous(IsoDayOfWeek.Monday);
 let aa = 2
 
 type Updates = JsonProvider<""" {
@@ -157,12 +138,12 @@ let main argv =
     //let cancellationTokenSource = new CancellationTokenSource()
     //let config = { defaultConfig with cancellationToken = cancellationTokenSource.Token }
     //let listening, server = startWebServerAsync defaultConfig (Successful.OK "")
-    let scheduleJob = async {
-        let! res = scheduler.ScheduleJob(job, trigger)
-        res
-    }
+    //let scheduleJob = async {
+    //    let! res = scheduler.ScheduleJob(job, trigger)
+    //    res
+    //}
 
-    Async.RunSynchronously scheduleJob
+    //Async.RunSynchronously scheduleJob
     //Async.Start server
     Console.ReadKey true
         |> ignore

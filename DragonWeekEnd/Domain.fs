@@ -19,16 +19,16 @@
     type DayDrinkFact =
         WeekDay * Fact
 
-    let getDayFact
+    let getFact
         (facts: DayDrinkFact list)
         (weekDay: WeekDay)
-        : DayDrinkFact =
+        : Fact =
             facts 
                 |> List.where (fun (day, _) -> day = weekDay)
                 |> List.first
                 |> function
-                    | Some drinkFact -> drinkFact
-                    | None -> DayDrinkFact(weekDay, NA)
+                    | Some (_, fact) -> fact
+                    | None -> NA
     
     let dayOfWeekToWeekDay 
         (dayOfWeek: IsoDayOfWeek)
@@ -48,8 +48,18 @@
         : WeekDay option = dayOfWeekToWeekDay date.DayOfWeek
 
     type WeekDrinkFact = private {
-        WeekStart : LocalDate
-        Days: DayDrinkFact list }
+        weekStart : LocalDate
+        days: DayDrinkFact list }
+        with
+        member this.Monday = getFact this.Days Monday
+        member this.Tuesday = getFact this.Days Tuesday
+        member this.Wednesday = getFact this.Days Wednesday
+        member this.Thursday = getFact this.Days Thursday
+        member this.Friday = getFact this.Days Friday
+        member this.Saturday = getFact this.Days Saturday
+        member this.Sunday = getFact this.Days Sunday
+        member this.WeekStart = this.weekStart
+        member this.Days = this.days
 
     module WeekDrinkFact =
 
@@ -103,15 +113,6 @@
             let weekStart = previousSunday.PlusDays(1)
             
             Some { 
-                WeekStart = weekStart;
-                Days = inWeekDays }
-
-        type WeekDrinkFact with
-            member this.Monday = getDayFact this.Days Monday
-            member this.Tuesday = getDayFact this.Days Tuesday
-            member this.Wednesday = getDayFact this.Days Wednesday
-            member this.Thursday = getDayFact this.Days Thursday
-            member this.Friday = getDayFact this.Days Friday
-            member this.Saturday = getDayFact this.Days Saturday
-            member this.Sunday = getDayFact this.Days Sunday
+                weekStart = weekStart;
+                days = inWeekDays }
 
