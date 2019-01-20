@@ -35,8 +35,25 @@
         
         results
 
-    let create 
+    let createOrUpdate
         (fact: WeekDrinkFact) =
+        let toUpdate =
+            coll
+                .Find(fun x -> true)
+                .ToList()
+            |> List.ofSeq
+            |> List.map (fun s ->
+                let value = jsonSerializer.UnPickleOfString<WeekDrinkFact> s.Value
+                let id = s.Id
+                (id, value))
+            |> List.filter (fun (_, value) -> value.WeekStart = fact.WeekStart)
+            |> List.first
+        
         let serialized = jsonSerializer.PickleToString fact
         let dto = { Id = BsonObjectId.Empty; Value = serialized; }
-        do coll.InsertOne(dto)
+        
+        match toUpdate with
+        | Some (id, _) -> do coll.ReplaceOne((fun x -> x.Id = id), { dto with Id = BsonObjectId.Create(id)}) |> ignore
+        | _ -> do coll.InsertOne(dto)
+    
+    
