@@ -53,8 +53,8 @@
             let mergedValue = WeekDrinkFact.optimisticMerge fact existingValue
             match mergedValue with
             | None -> ()
-            | Some _ ->
-            let serialized =  jsonSerializer.PickleToString mergedValue
+            | Some value ->
+            let serialized =  jsonSerializer.PickleToString value
             let record = { Id = BsonObjectId.Create(id); Value = serialized }
             do coll.ReplaceOne((fun x -> x.Id = id), record) |> ignore
         | _ ->
