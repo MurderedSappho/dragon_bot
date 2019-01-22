@@ -2,7 +2,6 @@
 
     open MongoDB.Bson.Serialization.Attributes
     open MongoDB.Driver
-    open NodaTime
     open Domain
     open MBrace.FsPickler.Json
     open MongoDB.Bson
@@ -49,11 +48,18 @@
             |> List.filter (fun (_, value) -> value.WeekStart = fact.WeekStart)
             |> List.first
         
-        let serialized = jsonSerializer.PickleToString fact
-        let dto = { Id = BsonObjectId.Empty; Value = serialized; }
-        
         match toUpdate with
-        | Some (id, _) -> do coll.ReplaceOne((fun x -> x.Id = id), { dto with Id = BsonObjectId.Create(id)}) |> ignore
-        | _ -> do coll.InsertOne(dto)
+        | Some (id, existingValue) ->
+            let mergedValue = WeekDrinkFact.optimisticMerge fact existingValue
+            match mergedValue with
+            | None -> ()
+            | Some _ ->
+            let serialized =  jsonSerializer.PickleToString mergedValue
+            let record = { Id = BsonObjectId.Create(id); Value = serialized }
+            do coll.ReplaceOne((fun x -> x.Id = id), record) |> ignore
+        | _ ->
+            let serialized =  jsonSerializer.PickleToString fact
+            let record = { Id = BsonObjectId.Empty; Value = serialized }
+            do coll.InsertOne(record)
     
     

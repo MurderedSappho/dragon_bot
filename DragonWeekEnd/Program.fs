@@ -10,14 +10,14 @@ open FSharp.Data
 open System
 open YoLo
 open NodaTime
-open NodaTime
-open NodaTime
-open Suave.EventSource
+open Domain
 
 
 
 
 //let fact = Domain.WeekDrinkFact.create [(LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Friday), true)]
+//let second = Domain.WeekDrinkFact.create [(LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Saturday), false)]
+//let mr = Domain.WeekDrinkFact.optimisticMerge fact.Value second.Value
 //let first = Storage.createOrUpdate fact.Value
 //let all = Storage.getAll()
 //
@@ -90,11 +90,17 @@ let parseTimestamp
         .LocalDateTime
         .Date
 
+let parseBool
+    (value: string)
+    : bool =
+    let (_, parsed) = Boolean.TryParse(value)
+    parsed
 
 let result = Async.RunSynchronously (getChatUpdates 0)
 let va = result.Ok
 
-let getUpdatesLoop : Async<unit> =
+let getUpdatesLoop 
+    : Async<unit> =
     let rec loop updateId : Async<unit> =
         async {
           let! message = getChatUpdates updateId
@@ -111,16 +117,35 @@ let getUpdatesLoop : Async<unit> =
                  | Some item -> item.UpdateId + 1
                  | None -> updateId
           
-          let messages =
+          let weekDrinkFacts =
               updates
               |> List.sortByDescending (fun x -> x.Message.Date)
               |> List.map (fun x ->
                   let date = parseTimestamp x.Message.Date
-                  let message = x.Message.Text
-                  (date, message))
+                  let value = parseBool x.Message.Text
+                  (date, value))
               |> List.groupBy (fun (date, _) -> date)
-              |> List.map (fun (_, coll) -> List.head coll)
-          
+              |> List.map (fun (key, coll) -> 
+                  coll
+                  |> List.first
+                  |> function
+                        | Some (_, value) -> (key, value)
+                        | None -> (key, false))
+              |> List.groupBy (fun (date, _) -> getWeekStart date)
+              |> List.map (fun (_, coll) ->
+                  WeekDrinkFact.create coll)
+
+          do weekDrinkFacts
+          |> List.map (fun x ->
+                    match x with
+                    | Some fact -> 
+                        try 
+                            do Storage.createOrUpdate fact
+                        with 
+                        | ex -> ()
+                    | None -> ())
+          |> ignore
+
           do! Async.Sleep 10000
           
           return! loop lastUpdateId
@@ -134,8 +159,6 @@ let msg =
     |> List.ofArray
     |> List.map (fun x ->
         x.Message.Text)
-
-let os = ""
 
 let sendMessage chatId message = 
     async {

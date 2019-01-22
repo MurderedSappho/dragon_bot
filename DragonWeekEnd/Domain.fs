@@ -47,6 +47,16 @@
         (date: LocalDate)
         : WeekDay option = dayOfWeekToWeekDay date.DayOfWeek
 
+    let getWeekStart
+        (date: LocalDate)
+        : LocalDate =
+        let daysFromMonday = 
+                date.DayOfWeek
+                |> LanguagePrimitives.EnumToValue
+                |> (*) -1
+
+        date.PlusDays(daysFromMonday)
+
     type WeekDrinkFact = private {
         weekStart : LocalDate
         days: DayDrinkFact list }
@@ -62,8 +72,9 @@
         member this.Days = this.days
 
     module WeekDrinkFact =
+        open YoLo
 
-        let create 
+        let create
             (days: (LocalDate*bool) list)
             : WeekDrinkFact option =
             let sortedDays = 
@@ -75,16 +86,11 @@
             | None -> None
             | Some (firstDay, _) ->
 
-            let daysFromMonday = 
-                firstDay.DayOfWeek
-                |> LanguagePrimitives.EnumToValue
-                |> (*) -1
-
-            let previousSunday = firstDay.PlusDays(daysFromMonday)
+            let weekStart = getWeekStart firstDay
 
             let weekDays = 
-                [1..7]
-                |> List.map (fun n -> previousSunday.PlusDays(n))
+                [0..6]
+                |> List.map (fun n -> weekStart.PlusDays(n))
             
             let inWeekDays = 
                 weekDays
@@ -109,10 +115,35 @@
                                 | None -> DayDrinkFact(weekDay, NA)
 
                         resultsForDay)
-            
-            let weekStart = previousSunday.PlusDays(1)
-            
+
             Some { 
                 weekStart = weekStart;
                 days = inWeekDays }
+
+        let optimisticMerge
+            (first: WeekDrinkFact)
+            (second: WeekDrinkFact)
+            : WeekDrinkFact option  =
+            if (first.WeekStart <> second.WeekStart)
+            then None
+            else
+            let firstDays = 
+                first.Days
+                |> List.sortBy (fun (date, _) -> date)
+            let secondDays = 
+                second.Days
+                |> List.sortBy (fun (date, _) -> date)
+            
+            let mergedFacts = 
+                List.map2 (fun (firstDay, firstFact) (_, secondFact) -> 
+                            match (firstFact, secondFact) with
+                            | (Yes, _) -> DayDrinkFact(firstDay, Yes)
+                            | (No, _) -> DayDrinkFact(firstDay, No)
+                            | (_, Yes) -> DayDrinkFact(firstDay, Yes)
+                            | (_, No) -> DayDrinkFact(firstDay, No)
+                            | (_, _) -> DayDrinkFact(firstDay, NA)) firstDays secondDays
+
+            Some { 
+                weekStart = first.WeekStart;
+                days = mergedFacts }
 
