@@ -143,7 +143,7 @@
                             | (_, No) -> DayDrinkFact(firstDay, No)
                             | (_, _) -> DayDrinkFact(firstDay, NA)) firstDays secondDays
 
-            Some { 
+            Some {
                 weekStart = first.WeekStart;
                 days = mergedFacts }
 

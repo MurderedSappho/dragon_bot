@@ -4,26 +4,12 @@ open Newtonsoft.Json
 open Quartz
 open Quartz.Impl
 open System.Net.Http
-
 open System.Text
 open FSharp.Data
 open System
-open YoLo
 open NodaTime
 open Domain
-
-
-
-
-//let fact = Domain.WeekDrinkFact.create [(LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Friday), true)]
-//let second = Domain.WeekDrinkFact.create [(LocalDate.FromYearMonthWeekAndDay(2019, 1, 3, IsoDayOfWeek.Saturday), false)]
-//let mr = Domain.WeekDrinkFact.optimisticMerge fact.Value second.Value
-//let first = Storage.createOrUpdate fact.Value
-//let all = Storage.getAll()
-//
-
-
-let aa = 2
+open Storage
 
 type Updates = JsonProvider<"""{
     "ok": true,
@@ -54,6 +40,25 @@ type Updates = JsonProvider<"""{
     ]
 }""">
 
+type StatisicsMessage = string
+
+type SendMessageItem = 
+    {
+        [<JsonProperty("chat_id")>]
+        ChatId: int
+        [<JsonProperty("text")>]
+        Text: StatisicsMessage
+    }
+
+type DrinkTotalStatistics =
+    { 
+        Yes : int
+        No : int
+        NA: int
+    }
+    static member defaultValue = { Yes = 0; No = 0; NA = 0 }
+
+
 let scheduler = 
     let comp = async {
         let schedulerFactory = StdSchedulerFactory()
@@ -65,20 +70,15 @@ let scheduler =
 
     Async.RunSynchronously comp
 
-type SendMessageItem = 
-    {
-        [<JsonProperty("chat_id")>]
-        ChatId: int;
-        [<JsonProperty("text")>]
-        Text: string
-    }
-
 let getChatUpdates offset = 
     async {
-        let client = new HttpClient()
+        use client = new HttpClient()
         let url = sprintf "https://api.telegram.org/bot678792687:AAHa9sbP9zT4hm8x8ZD10u1GzJSf6ZIJiJg/getUpdates?offset=%i" offset
-        let! res =  client.GetStringAsync(url)
-        return Updates.Parse(res)
+        try
+            let! res =  client.GetStringAsync(url)
+            return Updates.Parse(res)
+        with
+        | _ -> return Updates.Parse("""{ "ok": true,"result": []}""")
     }
 
 let parseTimestamp
@@ -104,21 +104,22 @@ let getUpdatesLoop
     let rec loop updateId : Async<unit> =
         async {
           let! message = getChatUpdates updateId
-         
+
           let updates =
               message
                   .Result
               |> List.ofArray
-              
+
           let lastUpdateId =
               updates
               |> List.tryLast
               |> function
                  | Some item -> item.UpdateId + 1
                  | None -> updateId
-          
+
           let weekDrinkFacts =
               updates
+              |> List.where (fun x -> x.Message.Chat.Id = 436295526)
               |> List.sortByDescending (fun x -> x.Message.Date)
               |> List.map (fun x ->
                   let date = parseTimestamp x.Message.Date
@@ -139,7 +140,7 @@ let getUpdatesLoop
           |> List.map (fun x ->
                     match x with
                     | Some fact -> 
-                        try 
+                        try
                             do Storage.createOrUpdate fact
                         with 
                         | ex -> ()
@@ -154,33 +155,82 @@ let getUpdatesLoop
     
 Async.Start getUpdatesLoop
 
+let getDrinkStatisticts
+    (weekFact: WeekDrinkFact option) 
+    : DrinkTotalStatistics =
+    match weekFact with
+    | None -> DrinkTotalStatistics.defaultValue
+    | Some weekFactValue -> 
+    let days = weekFactValue.Days
+    List.fold (fun stats value -> 
+                match value with
+                | (_, Yes) -> { stats with Yes = stats.Yes + 1 }
+                | (_, No) -> { stats with Yes = stats.No + 1 }
+                | (_, NA) -> { stats with Yes = stats.NA + 1 }) DrinkTotalStatistics.defaultValue days
+
+let composeForWeek
+    (weekFact: WeekDrinkFact option)
+    : StatisicsMessage =
+    let { Yes = yes; } = getDrinkStatisticts weekFact
+    match yes with
+    | 0 -> "Is it your dragon? He see no alcohol whole week!"
+    | 1 -> "It's perfect result, only one alcohol consumption!"
+    | 2 -> "Every day your dragon is better - two times in a week means almost nothing"
+    | 3 -> "Blessed and approved by Zverj tree times in a week"
+    | 4 -> "Something goes wrong, 4 times it too much"
+    | days -> sprintf "%i times is unacceptable condition" days
+
 let msg =
     result.Result
     |> List.ofArray
     |> List.map (fun x ->
         x.Message.Text)
 
-let sendMessage chatId message = 
+let sendMessage 
+    chatId 
+    message =
     async {
-        let client = new HttpClient()
+        use client = new HttpClient()
         let url = "https://api.telegram.org/bot678792687:AAHa9sbP9zT4hm8x8ZD10u1GzJSf6ZIJiJg/sendMessage"
         let content = new StringContent(JsonConvert.SerializeObject({ ChatId= chatId; Text=message}), Encoding.UTF8, "application/json")
-        let! res =  client.PostAsync(url, content)
-        return res
+        try
+            let! res =  client.PostAsync(url, content)
+            ()
+        with
+        | _ -> ()
     }
 
-type TestJob() =
+type ZverSendJob() =
     interface IJob with
         member this.Execute(context: IJobExecutionContext) = 
-            let c = async {
-                let! va = (sendMessage 436295526 "vava")
-                Console.WriteLine(DateTime.Now)
-            }
+            let zversChatId = 436295526
             
+            let c = async {
+                let now = 
+                    SystemClock
+                        .Instance
+                        .GetCurrentInstant()
+                        .InUtc()
+                        .LocalDateTime
+                        .Date
+
+                let weekStart = getWeekStart now
+                let previousWeekStart = weekStart.PlusWeeks(-1)
+                
+                let message = 
+                    getAll()
+                    |> List.where (fun x -> x.WeekStart = previousWeekStart)
+                    |> List.first
+                    |> composeForWeek
+
+                let! res = sendMessage zversChatId message
+                ()
+            }
+
             Async.StartAsTask c :> _
             
 let job =
-    JobBuilder.Create<TestJob>().WithIdentity("j1", "g1").Build()
+    JobBuilder.Create<ZverSendJob>().WithIdentity("j1", "g1").Build()
            
 let trigger =
     TriggerBuilder
@@ -190,25 +240,21 @@ let trigger =
             let timezone = TimeZoneInfo.FindSystemTimeZoneById("FLE Standard Time")
 
             x.InTimeZone(timezone)
-             .StartingDailyAt(TimeOfDay.HourMinuteAndSecondOfDay(16, 26, 0))
-             .OnEveryDay()
+                .OnEveryDay()
+                .WithIntervalInMinutes(1)
+             //.StartingDailyAt(TimeOfDay.HourMinuteAndSecondOfDay(16, 25, 0))
+             //.OnDaysOfTheWeek(DayOfWeek.Wednesday)
              .Build() |> ignore)
             .Build()
 
-
-
 [<EntryPoint>]
 let main argv =
-    //let cancellationTokenSource = new CancellationTokenSource()
-    //let config = { defaultConfig with cancellationToken = cancellationTokenSource.Token }
-    //let listening, server = startWebServerAsync defaultConfig (Successful.OK "")
-    //let scheduleJob = async {
-    //    let! res = scheduler.ScheduleJob(job, trigger)
-    //    res
-    //}
+    let scheduleJob = async {
+        let! res = scheduler.ScheduleJob(job, trigger)
+        res
+    }
 
-    //Async.RunSynchronously scheduleJob
-    //Async.Start server
+    Async.RunSynchronously scheduleJob
     Console.ReadKey true
         |> ignore
     printfn "Hello World from F#!"
